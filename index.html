@@ -2,246 +2,290 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Image Grid Picker (3x4)</title>
-    <meta name="description" content="3x4 image grid inside 1200x660 background, library tabs with filter, extra placements row" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23000'/%3E%3Ctext x='50' y='58' font-size='52' text-anchor='middle' fill='%23fff' font-family='Arial,Helvetica,sans-serif'%3EIG%3C/text%3E%3C/svg%3E" />
-    <!-- Tailwind Play CDN (for demos) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spec little dungeon</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>tailwind.config = { theme: { extend: {} } }</script>
-    <!-- React + ReactDOM (development) -->
+    <script>tailwind.config = { theme: { extend: {} } };</script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <!-- Babel Standalone to transpile JSX in the browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   </head>
-  <body class="bg-neutral-50">
+  <body class="bg-black text-white">
     <div id="root"></div>
 
-    <!-- App code (JSX) -->
     <script type="text/babel">
-      const { useState, useMemo, useRef } = React;
+      const { useState, useMemo, useEffect } = React;
 
-      // Utilities
+      // ----- helpers -----
+      const DND_SLOT = "application/x-spec-slot"; // custom type for slot->slot drags
+
       function titleFromUrl(url) {
         try {
-          const u = new URL(url);
-          const last = u.pathname.split("/").filter(Boolean).pop() || "Image";
-          const base = decodeURIComponent(last.split(".")[0]);
-          return base.replace(/[-_]+/g, " ").trim();
+          const u = new URL(url, window.location.href);
+          const last = (u.pathname.split("/").filter(Boolean).pop() || "image");
+          const base = decodeURIComponent(last).replace(/\.[^.]+$/, "");
+          const pretty = base.replace(/[-_]+/g, " ").trim();
+          return (pretty || "image");
         } catch {
-          return "Image";
+          const clean = url.split("#")[0].split("?")[0];
+          const last = (clean.split("/").pop() || "image");
+          const base = decodeURIComponent(last).replace(/\.[^.]+$/, "");
+          const pretty = base.replace(/[-_]+/g, " ").trim();
+          return (pretty || "image");
         }
       }
-      function itemsFromUrls(urls) {
-        return urls.map(function(url){ return { url: url, title: titleFromUrl(url) }; });
-      }
+      const itemsFromUrls = (urls) => urls.map((url) => ({ url, title: titleFromUrl(url) }));
+      const swapUrls = (arr, a, b) => {
+        const next = arr.map(s => ({ ...s }));
+        const t = next[a].url; next[a].url = next[b].url; next[b].url = t;
+        return next;
+      };
 
-      // Defaults
-      const DEFAULT_IMAGES = [
-        "https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1491553895911-0055eca6402d?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1465146344425-f00d5f5c8f07?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1517816743773-6e0fd518b4a6?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=1200&auto=format&fit=crop"
-      ];
-      const DEFAULT_BG = "https://images.unsplash.com/photo-1517816743773-6e0fd518b4a6?q=80&w=1600&auto=format&fit=crop";
-      const DEFAULT_IMAGES_2 = [
-        "https://images.unsplash.com/photo-1502082553048-f009c37129b9?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1482192596544-9eb780fc7f66?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1504208434309-cb69f4fe52b0?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1482192505345-5655af888cc4?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1499084732479-de2c02d45fc4?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1495562569060-2eec283d3391?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?q=80&w=1200&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=1200&auto=format&fit=crop"
-      ];
-
+      // ----- defaults -----
       const SLOT_COUNT = 12;
       const EXTRA_SLOT_COUNT = 10;
 
+      const DEFAULT_IMAGES = [
+
+      ];
+      const DEFAULT_IMAGES_2 = [
+        "other/boom.png",
+      ];
+      const DEFAULT_BG = "stages/Stage1.png";
+      const BG_CHOICES = [
+        "stages/Stage1.png",
+        "stages/Stage2.png",
+        "stages/Stage3.png",
+        "stages/Stage4.png",
+        "stages/Stage5.png",
+      ];
       function App() {
         const [lib1, setLib1] = useState(itemsFromUrls(DEFAULT_IMAGES));
-        const [lib2, setLib2] = useState(itemsFromUrls(DEFAULT_IMAGES_2));
+        const [lib2] = useState(itemsFromUrls(DEFAULT_IMAGES_2));
         const [activeLib, setActiveLib] = useState(1);
         const [filter, setFilter] = useState("");
 
         const [selectedLibUrl, setSelectedLibUrl] = useState(null);
         const [bgUrl, setBgUrl] = useState(DEFAULT_BG);
 
-        const [slots, setSlots] = useState(function(){ return Array.from({ length: SLOT_COUNT }, function(_, i){ return { id: i, url: null }; }); });
-        const [extraSlots, setExtraSlots] = useState(function(){ return Array.from({ length: EXTRA_SLOT_COUNT }, function(_, i){ return { id: i, url: null }; }); });
+        const [slots, setSlots] = useState(() => Array.from({ length: SLOT_COUNT }, (_, i) => ({ id: i, url: null })));
+        const [extraSlots, setExtraSlots] = useState(() => Array.from({ length: EXTRA_SLOT_COUNT }, (_, i) => ({ id: i, url: null })));
 
-        const uploadBgRef = useRef(null);
+        // optional: load from /images1/index.json if present
+        useEffect(function(){
+          (async function(){
+            try {
+              const res = await fetch("characters/index.json", { cache: "no-store" });
+              if (!res.ok) return;
+              const data = await res.json();
+              const names = Array.isArray(data.images) ? data.images : [];
+              if (!names.length) return;
+              const urls = names.map(function(name){ return "characters/" + name; });
+              setLib1(itemsFromUrls(urls));
+            } catch (e) {
+              console.warn("Could not load index.json; using defaults.", e);
+            }
+          })();
+        }, []);
 
         const currentLibrary = activeLib === 1 ? lib1 : lib2;
-
-        const filteredLibrary = useMemo(function(){
+        const filteredLibrary = useMemo(() => {
           const term = filter.trim().toLowerCase();
           if (!term) return currentLibrary;
-          return currentLibrary.filter(function(item){ return item.title.toLowerCase().includes(term); });
+          return currentLibrary.filter((item) => item.title.toLowerCase().includes(term));
         }, [currentLibrary, filter]);
 
-        function placeIntoMainSlot(slotIndex, url) {
-          setSlots(function(prev){ return prev.map(function(s, i){ return i === slotIndex ? { id: s.id, url: url } : s; }); });
-        }
-        function clearMainSlot(slotIndex) {
-          setSlots(function(prev){ return prev.map(function(s, i){ return i === slotIndex ? { id: s.id, url: null } : s; }); });
-        }
-        function placeIntoExtraSlot(slotIndex, url) {
-          setExtraSlots(function(prev){ return prev.map(function(s, i){ return i === slotIndex ? { id: s.id, url: url } : s; }); });
-        }
-        function clearAll() {
-          setSlots(function(prev){ return prev.map(function(s){ return { id: s.id, url: null }; }); });
-          setExtraSlots(function(prev){ return prev.map(function(s){ return { id: s.id, url: null }; }); });
-        }
-        function onDropToMain(e, slotIndex) {
-          e.preventDefault();
-          const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
-          if (url) placeIntoMainSlot(slotIndex, url);
-        }
-        function onDropToExtra(e, slotIndex) {
-          e.preventDefault();
-          const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
-          if (url) placeIntoExtraSlot(slotIndex, url);
-        }
-        function onUploadBg(files) {
-          if (!files || files.length === 0) return;
-          const file = files[0];
-          const objectUrl = URL.createObjectURL(file);
-          setBgUrl(objectUrl);
-        }
+        const placeIntoMainSlot = (slotIndex, url) => {
+          setSlots(prev => prev.map((s,i) => i === slotIndex ? { ...s, url } : s));
+        };
+        const clearMainSlot = (slotIndex) => {
+          setSlots(prev => prev.map((s,i) => i === slotIndex ? { ...s, url: null } : s));
+        };
+        const placeIntoExtraSlot = (slotIndex, url) => {
+          setExtraSlots(prev => prev.map((s,i) => i === slotIndex ? { ...s, url } : s));
+        };
+        const clearExtraSlot = (slotIndex) => {
+          setExtraSlots(prev => prev.map((s,i) => i === slotIndex ? { ...s, url: null } : s));
+        };
 
-        const selectedCount = useMemo(function(){ return slots.filter(function(s){ return !!s.url; }).length; }, [slots]);
+        // --- Drag/drop handlers: slot→slot (swap/move) + library URL drop ---
+        const onDropToMain = (e, destIndex) => {
+          e.preventDefault();
+          const payloadStr = e.dataTransfer.getData(DND_SLOT);
+          if (payloadStr) {
+            try {
+              const p = JSON.parse(payloadStr);
+              if (p && p.area === "main") {
+                setSlots(prev => swapUrls(prev, p.index, destIndex));
+                return;
+              }
+              if (p && p.area === "extra") {
+                const srcUrl = extraSlots[p.index]?.url || null;
+                setSlots(prev => prev.map((s,i)=> i===destIndex ? { ...s, url: srcUrl } : s));
+                setExtraSlots(prev => prev.map((s,i)=> i===p.index ? { ...s, url: null } : s));
+                return;
+              }
+            } catch {}
+          }
+          const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+          if (url) placeIntoMainSlot(destIndex, url);
+        };
+
+        const onDropToExtra = (e, destIndex) => {
+          e.preventDefault();
+          const payloadStr = e.dataTransfer.getData(DND_SLOT);
+          if (payloadStr) {
+            try {
+              const p = JSON.parse(payloadStr);
+              if (p && p.area === "extra") {
+                setExtraSlots(prev => swapUrls(prev, p.index, destIndex));
+                return;
+              }
+              if (p && p.area === "main") {
+                const srcUrl = slots[p.index]?.url || null;
+                setExtraSlots(prev => prev.map((s,i)=> i===destIndex ? { ...s, url: srcUrl } : s));
+                setSlots(prev => prev.map((s,i)=> i===p.index ? { ...s, url: null } : s));
+                return;
+              }
+            } catch {}
+          }
+          const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+          if (url) placeIntoExtraSlot(destIndex, url);
+        };
+
+        const selectedCount = useMemo(() => slots.filter(s => !!s.url).length, [slots]);
 
         return (
-          <div className="min-h-screen w-full bg-neutral-50 text-neutral-900">
-            <header className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b border-neutral-200">
+          <div className="min-h-screen w-full bg-black text-white">
+            <header className="sticky top-0 z-10 bg-white/10 backdrop-blur border-b border-white/10">
               <div className="w-full py-3 flex items-center justify-between px-4">
                 <div className="flex items-center gap-3">
-                  <div className="size-8 rounded-xl bg-black/90 flex items-center justify-center text-white font-bold">IG</div>
+                  <div className="size-8 rounded-xl bg-black/90 flex items-center justify-center text-white font-bold">spec</div>
                   <div>
-                    <h1 className="text-lg font-semibold leading-tight">Image Grid Picker (3 x 4)</h1>
-                    <p className="text-xs text-neutral-500">Grid inside 1200x660 background (300x400 left). Library tabs and filter below. Extra 10 spaces beneath.</p>
+                    <h1 className="text-lg font-semibold leading-tight">S&B Drafting tool</h1>
+                    <p className="text-xs text-white/60">click to clear, drag and drop, yali yada</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={function(){ if (uploadBgRef.current) uploadBgRef.current.click(); }} className="px-3 py-2 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-sm">Change Background</button>
-                  <input ref={uploadBgRef} type="file" accept="image/*" className="hidden" onChange={function(e){ onUploadBg(e.target.files); }} />
-                  <button onClick={clearAll} className="px-3 py-2 rounded-xl bg-neutral-900 text-white text-sm hover:bg-black">Clear All Slots</button>
+                  <button onClick={() => { setSlots(prev => prev.map(s => ({...s, url: null}))); setExtraSlots(prev => prev.map(s => ({...s, url: null}))); }} className="px-3 py-2 rounded-xl bg-white/10 text-white text-sm hover:bg-white/20">Clear All Slots</button>
                 </div>
               </div>
             </header>
 
-            <section className="w-full py-6">
-              <div className="relative w-[1200px] h-[660px] rounded-2xl overflow-hidden border border-neutral-200 bg-neutral-200"
-                style={{ backgroundImage: 'url(' + bgUrl + ')', backgroundSize: 'cover', backgroundPosition: 'center' }}
-              >
-                <div className="absolute left-6 top-1/2 -translate-y-1/2">
-                  <div className="text-xs mb-2 px-2 py-1 inline-block rounded bg-white/80 border border-neutral-200">Grid • {selectedCount}/12</div>
-                  <div className="grid grid-cols-3 grid-rows-4 w-[300px] h-[400px] gap-0 bg-white/30 backdrop-blur-[1px] rounded-xl overflow-hidden">
-                    {slots.map(function(slot, i){
-                      return (
-                        <div key={slot.id} className="relative w-full h-full border border-white/40">
-                          {slot.url && (
-                            <button className="absolute left-1 top-1 z-10 size-6 rounded-md bg-white/90 hover:bg-white shadow border border-neutral-200 flex items-center justify-center text-[10px]" title="Clear" onClick={function(e){ e.stopPropagation(); clearMainSlot(i); }}>✖</button>
-                          )}
-                          <div className="absolute inset-0" onClick={function(){ if (selectedLibUrl) placeIntoMainSlot(i, selectedLibUrl); }} onDragOver={function(e){ e.preventDefault(); }} onDrop={function(e){ onDropToMain(e, i); }}>
-                            {slot.url ? <img src={slot.url} alt={"Slot " + (i + 1)} className="h-full w-full object-cover" draggable={false} /> : <div className="flex h-full w-full items-center justify-center text-[10px] text-white/80 select-none">click or drop</div>}
+            <section className="w-full py-3 flex items-start gap-6">
+              <div className="flex flex-col">
+                <div className="relative w-[1200px] h-[660px] rounded-2xl overflow-hidden border border-white/20 bg-black"
+                     style={{ backgroundImage: "url(" + bgUrl + ")", backgroundSize: "cover", backgroundPosition: "center" }}>
+                  {/* main grid (300x400) */}
+                  <div className="absolute left-6 top-1/2 -translate-y-1/2">
+                    <div className="grid grid-cols-3 grid-rows-4 w-[300px] h-[400px] gap-0 bg-white/10 backdrop-blur-[1px] rounded-xl overflow-hidden">
+                      {slots.map((slot, i) => (
+                        <div key={slot.id}
+                             className="relative w-full h-full border border-white/30"
+                             onDragEnter={(e) => e.currentTarget.classList.add("ring-2","ring-white/60")}
+                             onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-white/60")}
+                             onDrop={(e) => e.currentTarget.classList.remove("ring-2","ring-white/60")}>
+                          <div
+                            className="absolute inset-0"
+                            onClick={() => { if (selectedLibUrl) { placeIntoMainSlot(i, selectedLibUrl); } else if (slot.url) { clearMainSlot(i); } }}
+                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = e.dataTransfer.types.includes(DND_SLOT) ? "move" : "copy"; }}
+                            onDrop={(e) => onDropToMain(e, i)}
+                            draggable={!!slot.url}
+                            onDragStart={(e) => {
+                              if (!slot.url) return;
+                              e.dataTransfer.setData(DND_SLOT, JSON.stringify({ area: "main", index: i }));
+                              e.dataTransfer.effectAllowed = "move";
+                            }}
+                          >
+                            {slot.url
+                              ? <img src={slot.url} alt={"Slot " + (i+1)} className="h-full w-full object-cover" draggable={false} />
+                              : <div className="flex h-full w-full items-center justify-center text-[10px] text-white/80 select-none">click or drop</div>
+                            }
                           </div>
-                          <div className="absolute right-1 bottom-1 text-[9px] px-1.5 py-0.5 rounded bg-black/60 text-white">{i + 1}</div>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* background choices - right side in one column */}
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                    <div className="grid grid-cols-1 gap-2">
+                      {BG_CHOICES.map((url, idx) => (
+                        <button key={idx}
+                                onClick={() => setBgUrl(url)}
+                                className={"relative h-20 w-28 rounded-lg border " + (bgUrl === url ? "border-red-600 ring-2 ring-red-600" : "border-white/30 hover:border-white/50")}
+                                style={{ backgroundImage: "url(" + url + ")", backgroundSize: "cover", backgroundPosition: "center" }}
+                                title={"img " + (idx + 1)}>
+                          <span className="absolute inset-x-0 bottom-0 text-[11px] px-2 py-1 bg-black/50 text-white">{"Stage " + (idx + 1)}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
 
-            <section className="w-full pb-6">
-              <h2 className="text-sm font-medium text-neutral-700 mb-2 px-4">Extra Placements (10)</h2>
-              <div className="flex gap-3 flex-nowrap px-4">
-                {extraSlots.map(function(slot, i){
-                  return (
-                    <div key={slot.id} className="relative w-[96px] h-[96px] rounded-xl overflow-hidden border border-neutral-200 bg-white shrink-0"
-                      onClick={function(){ if (selectedLibUrl) placeIntoExtraSlot(i, selectedLibUrl); }}
-                      onDragOver={function(e){ e.preventDefault(); }}
-                      onDrop={function(e){ onDropToExtra(e, i); }}
+                {/* extra placements row (drag-enabled, click-to-clear) */}
+                <div className="mt-2 flex gap-2 flex-nowrap">
+                  {extraSlots.map((slot, i) => (
+                    <div key={slot.id}
+                         className="relative w-[96px] h-[96px] rounded-xl overflow-hidden border border-white/30 bg-transparent shrink-0"
+                         onClick={() => { if (selectedLibUrl) placeIntoExtraSlot(i, selectedLibUrl); else if (slot.url) clearExtraSlot(i); }}
+                         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = e.dataTransfer.types.includes(DND_SLOT) ? "move" : "copy"; }}
+                         onDrop={(e) => onDropToExtra(e, i)}
+                         onDragEnter={(e) => e.currentTarget.classList.add("ring-2","ring-white/60")}
+                         onDragLeave={(e) => e.currentTarget.classList.remove("ring-2","ring-white/60")}
                     >
-                      {slot.url ? (
-                        <>
-                          <img src={slot.url} alt={"Extra " + (i + 1)} className="h-full w-full object-cover" draggable={false} />
-                          <button className="absolute left-1 top-1 z-10 size-6 rounded-md bg-white/90 hover:bg-white shadow border border-neutral-200 flex items-center justify-center text-[10px]"
-                            title="Clear"
-                            onClick={function(e){ e.stopPropagation(); placeIntoExtraSlot(i, null); }}
-                          >✖</button>
-                        </>
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-400 select-none">click or drop</div>
-                      )}
-                      <div className="absolute right-1 bottom-1 text-[9px] px-1.5 py-0.5 rounded bg-black/60 text-white">{i + 1}</div>
+                      {slot.url
+                        ? <img src={slot.url} alt={"Extra " + (i+1)} className="h-full w-full object-cover" draggable={false} />
+                        : <div className="absolute inset-0 flex items-center justify-center text-[10px] text-white/80 select-none">click or drop</div>
+                      }
+                      {/* Make the whole tile draggable if it has content */}
+                      <div
+                        className="absolute inset-0"
+                        draggable={!!slot.url}
+                        onDragStart={(e) => {
+                          if (!slot.url) return;
+                          e.dataTransfer.setData(DND_SLOT, JSON.stringify({ area: "extra", index: i }));
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                      />
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="w-full pb-10">
-              <div className="mb-3 flex flex-wrap items-center gap-3 px-4">
-                <div className="inline-flex rounded-xl border border-neutral-300 overflow-hidden">
-                  <button
-                    className={"px-3 py-1.5 text-sm " + (activeLib === 1 ? "bg-neutral-900 text-white" : "bg-white text-neutral-700 hover:bg-neutral-100")}
-                    onClick={function(){ setActiveLib(1); }}
-                  >Library 1</button>
-                  <button
-                    className={"px-3 py-1.5 text-sm " + (activeLib === 2 ? "bg-neutral-900 text-white" : "bg-white text-neutral-700 hover:bg-neutral-100")}
-                    onClick={function(){ setActiveLib(2); }}
-                  >Library 2</button>
-                </div>
-                <div className="relative">
-                  <input
-                    value={filter}
-                    onChange={function(e){ setFilter(e.target.value); }}
-                    placeholder="Filter by title..."
-                    className="px-3 py-1.5 rounded-xl border border-neutral-300 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-300"
-                  />
+                  ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3 px-4">
-                {filteredLibrary.map(function(item, idx){
-                  return (
-                    <button
-                      key={item.url + idx}
-                      className={"relative aspect-square rounded-xl overflow-hidden border " + (selectedLibUrl === item.url ? "border-neutral-900 ring-2 ring-neutral-900" : "border-neutral-200 hover:border-neutral-300")}
-                      onClick={function(){ setSelectedLibUrl(item.url); }}
-                      draggable
-                      onDragStart={function(e){ e.dataTransfer.setData("text/uri-list", item.url); e.dataTransfer.setData("text/plain", item.url); }}
-                      title={item.title}
-                    >
+              {/* image library */}
+              <aside className="w-[650px] shrink-0 pr-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <div className="inline-flex rounded-xl border border-white/30 overflow-hidden">
+                    <button className={"px-3 py-1.5 text-sm " + (activeLib === 1 ? "bg-white/10 text-white" : "bg-transparent text-white hover:bg-white/10")}
+                            onClick={() => setActiveLib(1)}>Characters</button>
+                    <button className={"px-3 py-1.5 text-sm " + (activeLib === 2 ? "bg-white/10 text-white" : "bg-transparent text-white hover:bg-white/10")}
+                            onClick={() => setActiveLib(2)}>Others</button>
+                  </div>
+                  <div className="relative">
+                    <input value={filter}
+                           onChange={(e) => setFilter(e.target.value)}
+                           placeholder="Filter by name..."
+                           className="px-3 py-1.5 rounded-xl border border-white/30 bg-black/40 text-white placeholder-white/60 text-sm focus:outline-none focus:ring-2 focus:ring-white/30" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 max-h-[700px] overflow-auto pr-1">
+                  {filteredLibrary.map((item, idx) => (
+                    <button key={item.url + idx}
+                            className={"relative aspect-square rounded-md overflow-hidden border " + (selectedLibUrl === item.url ? "border-red-600 ring-2 ring-red-600" : "border-white/30 hover:border-white/50")}
+                            onClick={() => setSelectedLibUrl((prev) => (prev === item.url ? null : item.url))}
+                            draggable
+                            onDragStart={(e) => { e.dataTransfer.setData("text/uri-list", item.url); e.dataTransfer.setData("text/plain", item.url); }}
+                            title={item.title}>
                       <img src={item.url} alt={item.title} className="h-full w-full object-cover" />
-                      <div className="absolute left-0 right-0 bottom-0 text-[10px] px-1.5 py-1 bg-black/50 text-white line-clamp-1 text-left">
-                        {item.title}
-                      </div>
-                      {selectedLibUrl === item.url ? <div className="absolute inset-0 ring-4 ring-inset ring-black/20 pointer-events-none" /> : null}
+                      <div className="absolute left-0 right-0 bottom-0 text-[8px] px-1 py-[2px] bg-black/50 text-white line-clamp-1 text-left">{item.title}</div>
+                      {selectedLibUrl === item.url ? <div className="absolute inset-0 ring-4 ring-inset ring-red-300 pointer-events-none" /> : null}
                     </button>
-                  );
-                })}
-                {filteredLibrary.length === 0 ? (
-                  <div className="col-span-full text-xs text-neutral-500">No images match "{filter}".</div>
-                ) : null}
-              </div>
-
-              <footer className="mt-10 text-xs text-neutral-500 px-4">Background fixed at 1200x660; grid 300x400 on left; 10 extra slots below. Two library tabs with title filter.</footer>
+                  ))}
+                  {filteredLibrary.length === 0 ? <div className="col-span-full text-xs text-white/70">No images match "{filter}".</div> : null}
+                </div>
+              </aside>
             </section>
           </div>
         );
